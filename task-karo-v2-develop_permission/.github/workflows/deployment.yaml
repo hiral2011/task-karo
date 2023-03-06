@@ -1,0 +1,63 @@
+name: CI-CD
+# 1
+# Controls when the workflow will run
+
+# Triggers the workflow on push events but only for the master branch
+on:
+  push:
+    branches: [ develop_permission ]
+  
+#2
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repo 
+        uses: actions/checkout@v2
+      
+      # - name: Generate deployment package 
+      #   run: zip -r jinfiniti.zip *
+
+      - name: generate env
+        run: |
+          touch .env
+          echo DEBUG=${{ secrets.DEBUG }} >> .env
+          echo AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} >> .env
+          echo AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} >> .env
+          echo AWS_STORAGE_BUCKET_NAME=${{ secrets.AWS_STORAGE_BUCKET_NAME }} >> .env
+          echo AWS_S3_REGION_NAME=${{ secrets.AWS_S3_REGION_NAME }} >> .env
+          echo OTP_AGE=${{ secrets.OTP_AGE }} >> .env
+          echo ENV=${{ secrets.ENV }} >> .env
+          echo DB_NAME=${{ secrets.DB_NAME }} >> .env
+          echo DB_USER_NAME=${{ secrets.DB_USER_NAME }} >> .env
+          echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
+          echo DB_HOST=${{ secrets.DB_HOST }} >> .env
+          echo RAZORPAY_API_KEY=${{ secrets.RAZORPAY_API_KEY }} >> .env
+          echo RAZORPAY_API_SECRET=${{ secrets.RAZORPAY_API_SECRET }} >> .env
+          ls -a
+          cat .env
+
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.REMOTE_SSH_KEY_DEV }}
+          #ARGS: "-rltgoDzvO --delete"
+          SOURCE: "./"
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST_DEV }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER_DEV }}
+          TARGET: /home/ubuntu/
+          
+      - name: executing remote ssh commands using password
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST_DEV }}
+          username: ${{ secrets.REMOTE_USER_DEV }}
+          key: ${{ secrets.REMOTE_SSH_KEY_DEV }}
+          port: 22
+          script: |
+            ls
+            sudo docker container kill $(sudo docker ps -aq) || true
+            sudo docker rm $(sudo docker ps -aq) || true
+            sudo docker rmi $(sudo docker images -aq) || true
+            sudo docker-compose build --no-cahce
+            sudo docker-compose up -d
